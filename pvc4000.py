@@ -16,7 +16,25 @@ class PVC4000:
     """
     Class implementing Posifa PVC4000 i2c commands
 
-    source:
+    Quickstart:
+    #################################################
+    # follow common Adafruit i2c sensor flow, i.e.:
+    import time
+    import board
+    import busio
+    import pvc4000
+
+    i2c = busio.I2C(board.SCL, board.SDA)  # initialize i2c bus with standard setup (pins and freq)
+
+    pvc = PVC4000(i2c, address: int = 0x50)  # initialize the sensor with i2c bus (address is optional)
+
+    while True:
+        pressure = pvc.pressure  # retrieve pressure data from sensor using the pressure property
+        print("PVC4000 reports %d microns Hg" % pressure)  # print retrieved pressure to STDOUT
+        time.sleep(2)  # sleep a bit, so we don't get data barf
+    #################################################
+
+    Source:
     https://posifatech.com/wp-content/uploads/2020/11/PVC-I2C-Application-Note-v0.9.7.pdf
     https://posifatech.com/wp-content/uploads/2020/11/Datasheet_PVC4000EVK_Vacuum_RevA_C0.6.pdf
 
@@ -49,6 +67,7 @@ class PVC4000:
             pass
         else:
             print('Invalid raw data! yikes!')
+            print('bytearray dump: ', self._buffer)
             return None, None
 
         count = struct.unpack('>H', self._buffer[1:3])[0]
@@ -59,11 +78,39 @@ class PVC4000:
         else:
             return 13.5 * (count - 10_000) + 10_000, temp
 
-    def read_calibrated_data(self) -> Union[None, int]:
+    # def read_calibrated_data(self) -> Union[None, int]:
+    #     """
+    #
+    #     :return: pressure (microns mercury)
+    #     """
+    #     with self.i2c_device as i2c:
+    #         i2c.write(_CALIBRATED_DATA_REGISTER)
+    #         time.sleep(0.05)
+    #
+    #     with self.i2c_device as i2c:
+    #         i2c.readinto(self._buffer)
+    #
+    #     if PVC4000.check_sum(self._buffer[0], self[1:5]):
+    #         pass
+    #     else:
+    #         print('Invalid calibrated data! Yikes!')
+    #         print('bytearray dump: ', self._buffer)
+    #         return None
+    #
+    #     count = struct.unpack('>H', self._buffer[1:3])[0]
+    #
+    #     if count <= 10_000:
+    #         return count
+    #     else:
+    #         return 13.5 * (count - 10_000) + 10_000
+
+    @property
+    def pressure(self) -> Union[None, int]:
         """
 
         :return: pressure (microns mercury)
         """
+
         with self.i2c_device as i2c:
             i2c.write(_CALIBRATED_DATA_REGISTER)
             time.sleep(0.05)
@@ -75,6 +122,7 @@ class PVC4000:
             pass
         else:
             print('Invalid calibrated data! Yikes!')
+            print('bytearray dump: ', self._buffer)
             return None
 
         count = struct.unpack('>H', self._buffer[1:3])[0]
@@ -95,6 +143,6 @@ class PVC4000:
         :return: boolean result of checksum
         """
 
-        # negative of the sum of data bytes, twos complimented, plus one
+        # negative of the sum of data bytes, 8 bit modulo, twos complimented, plus one
         # should equal the checksum provided in data payload
-        return (-sum(data) + 0xff) + 0x01 == csum
+        return (-(sum(data) % 256) + 0xff) + 0x01 == csum
