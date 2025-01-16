@@ -1,7 +1,10 @@
 import time
 import struct
 
-from typing import Union, Tuple
+try:
+    from typing import Union
+except:
+    pass
 
 from adafruit_bus_device import i2c_device
 
@@ -58,56 +61,40 @@ class PVC4000:
     def __exit__(self, exc_type, exc_val, exc_tb):
         return False
 
-    def read_raw_data(self) -> Union[Tuple[None, None], Tuple[int, int]]:
+    def read_calibrated_data(self) -> int:
         """
 
-        :return: tuple of pressure (microns mercury), temperature (C)
+        :return:
         """
-        with self.i2c_device as i2c:
-            i2c.write(_RAW_DATA_REGISTER)
-            time.sleep(0.05)
 
-        with self.i2c_device as i2c:
-            i2c.readinto(self._buffer)
+        for _ in range(20):
+            with self.i2c_device as i2c:
+                i2c.readinto(self._buffer)
 
-        if PVC4000.check_sum(self._buffer[0], self._buffer[1:6]) is True:
-            pass
-        else:
-            print('Invalid raw data! yikes!')
-            print('bytearray dump: ', self._buffer)
-            return None, None
+            if PVC4000.check_sum(self._buffer[0], self._buffer[1:5]) is True:
+                count = struct.unpack('>H', self._buffer[1:3])[0]
 
-        count = struct.unpack('>H', self._buffer[1:3])[0]
-        temp = struct.unpack('>HH', self._buffer[1:3])[0]
+                if count <= 10_000:
+                    return count
+                else:
+                    return 13.5 * (count - 10_000) + 10_000
 
-        if count <= 10_000:
-            return count, temp
-        else:
-            return 13.5 * (count - 10_000) + 10_000, temp
+            else:
+                print('Invalid calibrated data! Yikes!')
+                print('bytearray dump: ', self._buffer)
+                continue
+
+        print('failed to find valid data - CRC failure and/or no data received')
+        return 0
 
     @property
-    def pressure(self) -> Union[None, int]:
+    def pressure(self) -> int:
         """
 
         :return: pressure (microns mercury)
         """
 
-        with self.i2c_device as i2c:
-            i2c.readinto(self._buffer)
-
-        if PVC4000.check_sum(self._buffer[0], self._buffer[1:5]):
-            pass
-        else:
-            print('Invalid calibrated data! Yikes!')
-            print('bytearray dump: ', self._buffer)
-            return None
-
-        count = struct.unpack('>H', self._buffer[1:3])[0]
-
-        if count <= 10_000:
-            return count
-        else:
-            return 13.5 * (count - 10_000) + 10_000
+        return self.read_calibrated_data()
 
     @staticmethod
     def check_sum(csum: int, data: bytearray) -> bool:
