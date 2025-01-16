@@ -82,7 +82,8 @@ class PVC4000:
             else:
                 print('Invalid calibrated data! Yikes!')
                 print('bytearray dump: ', self._buffer)
-                continue
+                time.sleep(0.05)
+                # continue
 
         print('failed to find valid data - CRC failure and/or no data received')
         return 0
