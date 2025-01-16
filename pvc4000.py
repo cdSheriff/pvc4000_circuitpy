@@ -5,6 +5,7 @@ from typing import Union, Tuple
 
 from adafruit_bus_device import i2c_device
 
+import board
 from busio import I2C
 
 _CALIBRATED_DATA_REGISTER = 0x00
@@ -51,6 +52,12 @@ class PVC4000:
         self._buffer = bytearray(6)
         self._crc_buffer = bytearray(2)
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        return False
+
     def read_raw_data(self) -> Union[Tuple[None, None], Tuple[int, int]]:
         """
 
@@ -78,32 +85,6 @@ class PVC4000:
         else:
             return 13.5 * (count - 10_000) + 10_000, temp
 
-    # def read_calibrated_data(self) -> Union[None, int]:
-    #     """
-    #
-    #     :return: pressure (microns mercury)
-    #     """
-    #     with self.i2c_device as i2c:
-    #         i2c.write(_CALIBRATED_DATA_REGISTER)
-    #         time.sleep(0.05)
-    #
-    #     with self.i2c_device as i2c:
-    #         i2c.readinto(self._buffer)
-    #
-    #     if PVC4000.check_sum(self._buffer[0], self[1:5]):
-    #         pass
-    #     else:
-    #         print('Invalid calibrated data! Yikes!')
-    #         print('bytearray dump: ', self._buffer)
-    #         return None
-    #
-    #     count = struct.unpack('>H', self._buffer[1:3])[0]
-    #
-    #     if count <= 10_000:
-    #         return count
-    #     else:
-    #         return 13.5 * (count - 10_000) + 10_000
-
     @property
     def pressure(self) -> Union[None, int]:
         """
@@ -112,13 +93,9 @@ class PVC4000:
         """
 
         with self.i2c_device as i2c:
-            i2c.write(_CALIBRATED_DATA_REGISTER)
-            time.sleep(0.05)
-
-        with self.i2c_device as i2c:
             i2c.readinto(self._buffer)
 
-        if PVC4000.check_sum(self._buffer[0], self[1:5]):
+        if PVC4000.check_sum(self._buffer[0], self._buffer[1:5]):
             pass
         else:
             print('Invalid calibrated data! Yikes!')
@@ -146,3 +123,9 @@ class PVC4000:
         # negative of the sum of data bytes, 8 bit modulo, twos complimented, plus one
         # should equal the checksum provided in data payload
         return (-(sum(data) % 256) + 0xff) + 0x01 == csum
+
+
+if __name__ == '__main__':
+    i2c = board.I2C()
+    with PVC4000(i2c) as pvc:
+        print(pvc.pressure)
